@@ -2,7 +2,7 @@ const ethers = require('ethers');
 const ping = require('ping');
 
 const type = process.argv[2]; // "http" or "wss"
-const tries = process.argv[3];
+const tries = parseInt(process.argv[3]);
 const rpcUrls = process.argv.slice(4); // All command-line arguments after the tries
 
 const network = {
@@ -20,27 +20,25 @@ const address = '0x27aCED470E1E232BabF2Da93A78269bB5739C48C'; // address to get 
 const results = {};
 
 async function testProvider(rpcUrl, provider) {
+  const pingResult = await ping.promise.probe(rpcUrl.split('//')[1].split(':')[0]);
   const times = [];
   const blockTimes = [];
   const balanceTimes = [];
-  const pingResult = await ping.promise.probe(rpcUrl.split('//')[1].split(':')[0]);
   for(let i = 0; i < tries; i++) {
+    console.log(`Iteration ${i+1}`);
     const start = Date.now();
     const gasEstimate = await provider.estimateGas(transaction);
     const end = Date.now();
-    console.log(`Iteration ${i+1}, Gas estimate: ${gasEstimate.toString()}`);
     times.push(end - start);
 
     const startBlock = Date.now();
     const block = await provider.getBlock();
     const endBlock = Date.now();
-    console.log(`Iteration ${i+1}, Block number: ${block.number}`);
     blockTimes.push(endBlock - startBlock);
 
     const startBalance = Date.now();
     const balance = await provider.getBalance(address);
     const endBalance = Date.now();
-    console.log(`Iteration ${i+1}, Balance: ${balance.toString()}`);
     balanceTimes.push(endBalance - startBalance);
   }
   const average = times.reduce((a, b) => a + b, 0) / times.length;
@@ -66,22 +64,9 @@ async function testWsProvider(rpcUrl) {
 }
 
 if(type === "http") {
-  Promise.all(rpcUrls.map(testHttpProvider)).then(() => {
-    console.table(results);
-    process.exit(0);
-  }).catch((error) => {
-    console.error('An error occurred:', error);
-    process.exit(1);
-  });
+  Promise.all(rpcUrls.map(testHttpProvider)).then(() => { console.table(results); process.exit(0); });
 }
 
 if(type === "wss") {
-  Promise.all(rpcUrls.map(testWsProvider)).then(() => {
-    console.table(results);
-    process.exit(0);
-  }).catch((error) => {
-    console.error('An error occurred:', error);
-    process.exit(1);
-  });
+  Promise.all(rpcUrls.map(testWsProvider)).then(() => { console.table(results); process.exit(0); });
 }
-``
