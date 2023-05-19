@@ -2,8 +2,8 @@ const ethers = require('ethers');
 const ping = require('ping');
 
 const type = process.argv[2]; // "http" or "wss"
-const tries = parseInt(process.argv[3]);
-const rpcUrls = process.argv.slice(4); // All command-line arguments after the tries
+const duration = parseInt(process.argv[3]) * 1000; // duration in milliseconds
+const rpcUrls = process.argv.slice(4); // All command-line arguments after the duration
 
 const network = {
   chainId: 1, // For Ethereum Mainnet
@@ -22,29 +22,27 @@ const results = {};
 async function testProvider(rpcUrl, provider) {
   const pingResult = await ping.promise.probe(rpcUrl.split('//')[1].split(':')[0]);
   const times = [];
-  const blockTimes = [];
   const balanceTimes = [];
-  for(let i = 0; i < tries; i++) {
-    console.log(`Iteration ${i+1}`);
-    const start = Date.now();
-    const gasEstimate = await provider.estimateGas(transaction);
-    const end = Date.now();
-    times.push(end - start);
-
-    const startBlock = Date.now();
-    const block = await provider.getBlock();
-    const endBlock = Date.now();
-    blockTimes.push(endBlock - startBlock);
+  
+  const start = Date.now();
+  while (Date.now() - start < duration) {
+    const startGasEstimate = Date.now();
+    await provider.estimateGas(transaction);
+    const endGasEstimate = Date.now();
+    times.push(endGasEstimate - startGasEstimate);
 
     const startBalance = Date.now();
-    const balance = await provider.getBalance(address);
+    await provider.getBalance(address);
     const endBalance = Date.now();
     balanceTimes.push(endBalance - startBalance);
+
+    // Display a progress timer
+    console.log(`Elapsed time: ${((Date.now() - start) / 1000).toFixed(2)} seconds`);
   }
-  const average = times.reduce((a, b) => a + b, 0) / times.length;
-  const averageBlock = blockTimes.reduce((a, b) => a + b, 0) / blockTimes.length;
-  const averageBalance = balanceTimes.reduce((a, b) => a + b, 0) / balanceTimes.length;
-  results[rpcUrl] = {'estimateGas': average, 'Ping speed': pingResult.avg, 'getBlock': averageBlock, 'getBalance': averageBalance};
+
+  const average = (times.reduce((a, b) => a + b, 0) / times.length).toFixed(2);
+  const averageBalance = (balanceTimes.reduce((a, b) => a + b, 0) / balanceTimes.length).toFixed(2);
+  results[rpcUrl] = {'Ping speed': Number(pingResult.avg).toFixed(2), 'estimateGas': average, 'getBalance': averageBalance};
 }
 
 async function testHttpProvider(rpcUrl) {
@@ -52,7 +50,7 @@ async function testHttpProvider(rpcUrl) {
     chainId: network.chainId,
     name: network.name
   });
-  await testProvider(rpcUrl, customHttpProvider);
+  return testProvider(rpcUrl, customHttpProvider);
 }
 
 async function testWsProvider(rpcUrl) {
@@ -60,13 +58,10 @@ async function testWsProvider(rpcUrl) {
     chainId: network.chainId,
     name: network.name
   });
-  await testProvider(rpcUrl, customWebSocketProvider);
+  return testProvider(rpcUrl, customWebSocketProvider);
 }
 
-if(type === "http") {
-  Promise.all(rpcUrls.map(testHttpProvider)).then(() => { console.table(results); process.exit(0); });
-}
-
-if(type === "wss") {
-  Promise.all(rpcUrls.map(testWsProvider)).then(() => { console.table(results); process.exit(0); });
-}
+Promise.all(rpcUrls.map(type === "http" ? testHttpProvider : testWsProvider)).then(() => {
+  console.table(results);
+  process.exit(0);
+});
